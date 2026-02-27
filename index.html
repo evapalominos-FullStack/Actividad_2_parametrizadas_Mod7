@@ -1,0 +1,126 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>CRUD Clientes Pro</title>
+    <style>
+        body { font-family: sans-serif; display: flex; flex-wrap: wrap; gap: 15px; padding: 20px; background: #f4f4f4;}
+        form { background: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); width: 280px; }
+        .full { width: 100%; }
+        table { width: 100%; border-collapse: collapse; background: white; }
+        th, td { border: 1px solid #ddd; padding: 10px; }
+    </style>
+</head>
+<body>
+
+    <!-- FORMULARIO CREAR -->
+    <form id="fCrear">
+        <h3>Nuevo Cliente</h3>
+        <input type="text" id="c_rut" placeholder="RUT" required><br><br>
+        <input type="text" id="c_nom" placeholder="Nombre" required><br><br>
+        <input type="number" id="c_eda" placeholder="Edad" required><br><br>
+        <button type="submit">Registrar</button>
+    </form>
+
+    <!-- FORMULARIO CONSULTAS / FILTROS -->
+    <form id="fBuscar">
+        <h3>Consultar / Filtros</h3>
+        <input type="text" id="b_rut" placeholder="Buscar por RUT"><br><br>
+        <input type="text" id="b_nom" placeholder="Buscar por Nombre/Prefijo"><br><br>
+        <input type="number" id="b_min" placeholder="Edad Min">
+        <input type="number" id="b_max" placeholder="Edad Max"><br><br>
+        <button type="submit">Aplicar Filtros</button>
+        <button type="button" onclick="cargarTodo()">Ver Todos</button>
+    </form>
+
+    <!-- FORMULARIO ELIMINAR POR RANGO -->
+    <form id="fEliminarRango">
+        <h3>Eliminar por Criterio</h3>
+        <input type="number" id="e_min" placeholder="Edad Min">
+        <input type="number" id="e_max" placeholder="Edad Max"><br><br>
+        <button type="submit" style="color: red;">Eliminar en Rango</button>
+    </form>
+
+    <div class="full">
+        <h3>Resultados</h3>
+        <table id="tabla">
+            <thead><tr><th>RUT</th><th>Nombre</th><th>Edad</th><th>Acción</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <script>
+        const UI = {
+            tabla: document.querySelector('#tabla tbody'),
+            formBusca: document.getElementById('fBuscar')
+        };
+
+        async function api(url, method = 'GET', body = null) {
+            const options = { method, headers: {'Content-Type': 'application/json'} };
+            if(body) options.body = JSON.stringify(body);
+            const res = await fetch(url, options);
+            const data = await res.json();
+            if(!res.ok) alert(data.error || data.message);
+            return data;
+        }
+
+        async function render(clientes) {
+            UI.tabla.innerHTML = Array.isArray(clientes) 
+                ? clientes.map(c => `
+                    <tr>
+                        <td>${c.rut}</td>
+                        <td>${c.nombre}</td>
+                        <td>${c.edad}</td>
+                        <td><button onclick="borrar('${c.rut}')">Eliminar</button></td>
+                    </tr>`).join('')
+                : `<tr><td colspan="4">${clientes.message || 'Sin datos'}</td></tr>`;
+        }
+
+      async function cargarTodo() { 
+    try {
+        const data = await api('/clientes');
+        console.log("Datos recibidos:", data); // Mira esto en F12
+        render(data); 
+    } catch (err) {
+        console.error("Error al cargar:", err);
+        UI.tabla.innerHTML = `<tr><td colspan="4">Error de conexión con el servidor</td></tr>`;
+    }
+}
+
+
+        // Filtros combinados
+        UI.formBusca.onsubmit = async (e) => {
+            e.preventDefault();
+            let query = new URLSearchParams();
+            if(b_rut.value) query.append('rut', b_rut.value);
+            if(b_nom.value) query.append('nombre', b_nom.value);
+            if(b_min.value && b_max.value) {
+                query.append('edadMin', b_min.value);
+                query.append('edadMax', b_max.value);
+            }
+            render(await api(`/clientes?${query.toString()}`));
+        };
+
+        async function borrar(rut) {
+            await api(`/clientes/${rut}`, 'DELETE');
+            cargarTodo();
+        }
+
+        document.getElementById('fCrear').onsubmit = async (e) => {
+            e.preventDefault();
+            await api('/clientes', 'POST', {rut: c_rut.value, nombre: c_nom.value, edad: parseInt(c_eda.value)});
+            cargarTodo();
+        };
+
+        document.getElementById('fEliminarRango').onsubmit = async (e) => {
+            e.preventDefault();
+            const res = await api(`/clientes?edadMin=${e_min.value}&edadMax=${e_max.value}`, 'DELETE');
+            if(res.eliminados) alert("Eliminados: " + res.eliminados.join(', '));
+            cargarTodo();
+        };
+
+        window.onload = cargarTodo;
+    </script>
+</body>
+</html>
